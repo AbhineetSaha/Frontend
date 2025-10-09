@@ -1,0 +1,315 @@
+"use client";
+
+import type React from "react";
+
+import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Send, Loader2, Sparkles } from "lucide-react";
+import type { Message } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import type { Components } from "react-markdown";
+
+interface ChatPanelProps {
+  messages: Message[];
+  onSendMessage: (content: string) => void;
+  loading: boolean;
+  conversationTitle?: string;
+}
+
+const markdownComponents: Components = {
+  a: ({ node, ...props }) => (
+    <a
+      {...props}
+      className={cn(
+        "text-primary underline underline-offset-2 transition-colors hover:text-primary/80",
+        props.className
+      )}
+      target={props.target ?? "_blank"}
+      rel={props.rel ?? "noopener noreferrer"}
+    />
+  ),
+  code: ({ node, inline, className, children, ...props }) => {
+    if (inline) {
+      return (
+        <code
+          {...props}
+          className={cn(
+            "rounded-md bg-muted/70 px-1.5 py-0.5 font-mono text-xs",
+            className
+          )}
+        >
+          {children}
+        </code>
+      );
+    }
+
+    return (
+      <pre className="chat-markdown-pre">
+        <code
+          {...props}
+          className={cn("font-mono text-xs sm:text-sm", className)}
+        >
+          {children}
+        </code>
+      </pre>
+    );
+  },
+  ul: ({ node, className, ...props }) => (
+    <ul
+      {...props}
+      className={cn("list-disc space-y-1 pl-5", className)}
+    />
+  ),
+  ol: ({ node, className, ...props }) => (
+    <ol
+      {...props}
+      className={cn("list-decimal space-y-1 pl-5", className)}
+    />
+  ),
+  blockquote: ({ node, className, ...props }) => (
+    <blockquote
+      {...props}
+      className={cn(
+        "border-l-4 border-primary/40 pl-4 text-muted-foreground italic",
+        className
+      )}
+    />
+  ),
+};
+
+function MarkdownMessage({ content }: { content: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={markdownComponents}
+      className="chat-markdown"
+    >
+      {content}
+    </ReactMarkdown>
+  );
+}
+
+function TypingAnimation({
+  content,
+  timestamp,
+}: {
+  content: string;
+  timestamp: string;
+}) {
+  const [displayedContent, setDisplayedContent] = useState("");
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    if (currentIndex < content.length) {
+      const timeout = setTimeout(() => {
+        setDisplayedContent((prev) => prev + content[currentIndex]);
+        setCurrentIndex((prev) => prev + 1);
+      }, 20); // Adjust speed here (lower = faster)
+
+      return () => clearTimeout(timeout);
+    }
+  }, [currentIndex, content]);
+
+  const isComplete = currentIndex >= content.length;
+
+  return (
+    <>
+      {isComplete ? (
+        <MarkdownMessage content={content} />
+      ) : (
+        <div className="text-sm leading-relaxed whitespace-pre-wrap">
+          {displayedContent}
+          {currentIndex < content.length && (
+            <span className="ml-0.5 inline-block h-4 w-1 animate-pulse bg-current" />
+          )}
+        </div>
+      )}
+      <div className="text-xs opacity-60 mt-2">
+        {new Date(timestamp).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}
+      </div>
+    </>
+  );
+}
+
+export function ChatPanel({
+  messages,
+  onSendMessage,
+  loading,
+  conversationTitle,
+}: ChatPanelProps) {
+  const [input, setInput] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [lastMessageId, setLastMessageId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      if (
+        lastMsg.message_id !== lastMessageId &&
+        lastMsg.role === "assistant"
+      ) {
+        setLastMessageId(lastMsg.message_id);
+      }
+    }
+  }, [messages, lastMessageId]);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (input.trim() && !loading) {
+      onSendMessage(input.trim());
+      setInput("");
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-background/50 relative overflow-hidden">
+      {/* Subtle radial/diagonal glow */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 pointer-events-none" />
+
+      <div className="relative z-10 flex flex-col h-full">
+        {/* Header */}
+        <div className="flex-shrink-0 border-b border-border/50 px-6 py-4 bg-card/30 backdrop-blur-xl animate-in fade-in slide-in-from-top duration-500">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary animate-pulse" />
+            <h1 className="text-xl font-semibold bg-gradient-to-r from-primary via-primary/80 to-primary/60 bg-clip-text text-transparent">
+              {conversationTitle || "Select a conversation"}
+            </h1>
+          </div>
+          <p className="text-sm text-muted-foreground mt-1 ml-7">
+            Ask questions about your uploaded documents
+          </p>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-hidden px-6">
+          <ScrollArea className="h-full">
+            <div className="py-6 space-y-6 max-w-3xl mx-auto">
+              {messages.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-center animate-in fade-in zoom-in-95 duration-500">
+                  <div className="space-y-3 p-8 rounded-2xl bg-card/30 backdrop-blur-sm border border-border/50">
+                    <Sparkles className="h-12 w-12 text-primary mx-auto animate-pulse" />
+                    <p className="text-lg font-medium text-foreground">
+                      No messages yet
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Start a conversation by typing a message below
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                messages.map((message, index) => {
+                  const shouldAnimate =
+                    message.role === "assistant" &&
+                    message.message_id === lastMessageId;
+                  const messageTimestamp =
+                    message.timestamp ?? new Date().toISOString();
+
+                  return (
+                    <div
+                      key={message.message_id}
+                      className={cn(
+                        "flex gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500",
+                        message.role === "user"
+                          ? "justify-end"
+                          : "justify-start"
+                      )}
+                      style={{ animationDelay: `${index * 50}ms` }}
+                    >
+                      <div
+                        className={cn(
+                          "max-w-[80%] rounded-2xl px-4 py-3 shadow-lg transition-all duration-300 hover:shadow-2xl group",
+                          message.role === "user"
+                            ? "bg-gradient-to-br from-primary to-primary/90 text-primary-foreground shadow-primary/30 hover:shadow-primary/40 hover:scale-[1.02]"
+                            : "bg-card/50 text-card-foreground border border-border/50 shadow-card/50 backdrop-blur-sm hover:border-primary/30 hover:scale-[1.02]"
+                        )}
+                      >
+                        {shouldAnimate ? (
+                          <TypingAnimation
+                            content={message.content}
+                            timestamp={messageTimestamp}
+                          />
+                        ) : (
+                          <>
+                            <MarkdownMessage content={message.content} />
+                            <div className="text-xs opacity-60 mt-2 group-hover:opacity-80 transition-opacity">
+                              {new Date(messageTimestamp).toLocaleTimeString(
+                                [],
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              {loading && (
+                <div className="flex gap-4 justify-start animate-in fade-in duration-300">
+                  <div className="bg-card/50 text-card-foreground border border-primary/30 rounded-2xl px-4 py-3 shadow-lg shadow-primary/20 backdrop-blur-sm">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          </ScrollArea>
+        </div>
+
+        {/* Input */}
+        <div className="flex-shrink-0 border-t border-border/50 px-6 py-4 bg-card/30 backdrop-blur-xl animate-in fade-in slide-in-from-bottom duration-500">
+          <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
+            <div className="flex gap-2">
+              <Textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask a question about your documents..."
+                className="min-h-[60px] max-h-[200px] resize-none bg-background/50 border-border/50 focus:border-primary/50 focus:ring-primary/20 focus:scale-[1.01] focus:shadow-lg focus:shadow-primary/10 transition-all duration-200 rounded-xl"
+                disabled={loading}
+              />
+              <Button
+                type="submit"
+                size="icon"
+                disabled={loading || !input.trim()}
+                className="h-[60px] w-[60px] bg-gradient-to-br from-primary to-primary/80 shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 hover:scale-110 hover:rotate-12 transition-all duration-300 rounded-xl disabled:opacity-50 disabled:hover:scale-100 disabled:hover:rotate-0"
+              >
+                {loading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
+                <span className="sr-only">Send message</span>
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Press Enter to send, Shift+Enter for new line
+            </p>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}

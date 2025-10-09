@@ -1,0 +1,33 @@
+# General
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# Node / Frontend
+node_modules/
+.next/
+dist/
+out/
+.vercel/
+.env
+.env.*
+.turbo/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+!.env.local.example
+
+# VS Code / IDE
+.vscode/
+.idea/
+
+# Generated data/uploads
+storage/
+uploads/
