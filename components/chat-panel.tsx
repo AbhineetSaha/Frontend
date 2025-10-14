@@ -146,19 +146,52 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [lastMessageId, setLastMessageId] = useState<string | null>(null);
+  const animatedMessageIdsRef = useRef<Set<string>>(new Set());
+  const initializedMessagesRef = useRef(false);
+  const activeConversationIdRef = useRef<string | null>(null);
+  const [animatingMessageId, setAnimatingMessageId] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
-    if (messages.length > 0) {
-      const lastMsg = messages[messages.length - 1];
-      if (
-        lastMsg.message_id !== lastMessageId &&
-        lastMsg.role === "assistant"
-      ) {
-        setLastMessageId(lastMsg.message_id);
-      }
+    if (messages.length === 0) {
+      animatedMessageIdsRef.current.clear();
+      initializedMessagesRef.current = false;
+      activeConversationIdRef.current = null;
+      setAnimatingMessageId(null);
+      return;
     }
-  }, [messages, lastMessageId]);
+
+    const activeConversationId = messages[0]?.conversation_id ?? null;
+    if (
+      activeConversationId &&
+      activeConversationId !== activeConversationIdRef.current
+    ) {
+      activeConversationIdRef.current = activeConversationId;
+      animatedMessageIdsRef.current.clear();
+      initializedMessagesRef.current = false;
+    }
+
+    if (!initializedMessagesRef.current) {
+      messages
+        .filter((message) => message.role === "assistant")
+        .forEach((message) => {
+          animatedMessageIdsRef.current.add(message.message_id);
+        });
+      initializedMessagesRef.current = true;
+      setAnimatingMessageId(null);
+      return;
+    }
+
+    const latestMessage = messages[messages.length - 1];
+    if (
+      latestMessage.role === "assistant" &&
+      !animatedMessageIdsRef.current.has(latestMessage.message_id)
+    ) {
+      animatedMessageIdsRef.current.add(latestMessage.message_id);
+      setAnimatingMessageId(latestMessage.message_id);
+    }
+  }, [messages]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -219,7 +252,7 @@ export function ChatPanel({
                 messages.map((message, index) => {
                   const shouldAnimate =
                     message.role === "assistant" &&
-                    message.message_id === lastMessageId;
+                    message.message_id === animatingMessageId;
                   const messageTimestamp =
                     message.timestamp ?? new Date().toISOString();
 

@@ -81,20 +81,43 @@ export default function AppPage() {
       setBackendChecking(true);
     }
 
+<<<<<<< HEAD
     try {
       const response = await fetch(`${NORMALIZED_API_BASE}/`, {
         method: "GET",
         cache: "no-store",
       });
+=======
+    const healthPaths = ["/health", "/"];
+    let lastErrorMessage = "Unable to reach backend";
+    let reachable = false;
+>>>>>>> 713bbde (Fixed Reloading Issue)
 
-      if (!response.ok) {
-        throw new Error(`Backend responded with status ${response.status}`);
+    try {
+      for (const path of healthPaths) {
+        try {
+          const response = await fetch(`${NORMALIZED_API_BASE}${path}`, {
+            method: "GET",
+            cache: "no-store",
+          });
+
+          if (response.status < 500) {
+            reachable = true;
+            break;
+          }
+
+          lastErrorMessage = `Backend responded with status ${response.status} at ${path}`;
+        } catch (error) {
+          lastErrorMessage =
+            error instanceof Error ? error.message : "Unable to reach backend";
+        }
       }
 
-      if (isMountedRef.current) {
+      if (reachable && isMountedRef.current) {
         setBackendReady(true);
         setBackendLastError(null);
         setBackendRetryCount(0);
+        return;
       }
     } catch (error) {
       if (isMountedRef.current) {
@@ -106,11 +129,18 @@ export default function AppPage() {
         );
         setBackendRetryCount((prev) => prev + 1);
       }
+      return;
     } finally {
       if (isMountedRef.current) {
         setBackendChecking(false);
       }
       healthCheckInFlightRef.current = false;
+    }
+
+    if (isMountedRef.current && !reachable) {
+      console.error("Backend health check failed:", lastErrorMessage);
+      setBackendLastError(lastErrorMessage);
+      setBackendRetryCount((prev) => prev + 1);
     }
   }, [backendReady]);
 
@@ -149,7 +179,7 @@ export default function AppPage() {
   // Load conversations once backend is ready
   useEffect(() => {
     if (user && backendReady) {
-      loadConversations();
+      void loadConversations();
     }
   }, [user, backendReady]);
 
@@ -182,7 +212,10 @@ export default function AppPage() {
   };
 
   const loadConversations = async () => {
-    setLoading(true);
+    const shouldShowInitialSpinner = conversations.length === 0;
+    if (shouldShowInitialSpinner) {
+      setLoading(true);
+    }
     try {
       const loadedConversations = await conversationsApi.list();
       setConversations(loadedConversations);
@@ -209,7 +242,9 @@ export default function AppPage() {
         setSelectedConversationId(mockConversations[0].conversation_id);
       }
     } finally {
-      setLoading(false);
+      if (shouldShowInitialSpinner) {
+        setLoading(false);
+      }
     }
   };
 
@@ -618,6 +653,9 @@ export default function AppPage() {
                 <PanelLeftOpen className="h-5 w-5" />
               )}
             </Button>
+            <span className="text-2xl font-semibold tracking-tight bg-gradient-to-r from-primary via-primary/80 to-blue-400 bg-clip-text text-transparent drop-shadow">
+              D
+            </span>
             <Button
               variant="ghost"
               size="icon"
