@@ -59,16 +59,10 @@ const markdownComponents: Components = {
     );
   },
   ul: ({ node, className, ...props }) => (
-    <ul
-      {...props}
-      className={cn("list-disc space-y-1 pl-5", className)}
-    />
+    <ul {...props} className={cn("list-disc space-y-1 pl-5", className)} />
   ),
   ol: ({ node, className, ...props }) => (
-    <ol
-      {...props}
-      className={cn("list-decimal space-y-1 pl-5", className)}
-    />
+    <ol {...props} className={cn("list-decimal space-y-1 pl-5", className)} />
   ),
   blockquote: ({ node, className, ...props }) => (
     <blockquote
@@ -312,33 +306,36 @@ export function ChatPanel({
         </div>
 
         {/* Input */}
-        <div className="flex-shrink-0 border-t border-border/50 px-6 py-4 bg-card/30 backdrop-blur-xl animate-in fade-in slide-in-from-bottom duration-500">
-          <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
-            <div className="flex gap-2">
-              <Textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask a question about your documents..."
-                className="min-h-[60px] max-h-[200px] resize-none bg-background/50 border-border/50 focus:border-primary/50 focus:ring-primary/20 focus:scale-[1.01] focus:shadow-lg focus:shadow-primary/10 transition-all duration-200 rounded-xl"
-                disabled={loading}
-              />
-              <Button
-                type="submit"
-                size="icon"
-                disabled={loading || !input.trim()}
-                className="h-[60px] w-[60px] bg-gradient-to-br from-primary to-primary/80 shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 hover:scale-110 hover:rotate-12 transition-all duration-300 rounded-xl disabled:opacity-50 disabled:hover:scale-100 disabled:hover:rotate-0"
-              >
-                {loading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <Send className="h-5 w-5" />
-                )}
-                <span className="sr-only">Send message</span>
-              </Button>
+        <div className="flex-shrink-0 px-4 md:px-6 py-4 bg-gradient-to-t from-background via-background/90 to-transparent animate-in fade-in slide-in-from-bottom duration-500">
+          <form onSubmit={handleSubmit} className="max-w-2xl mx-auto">
+            <div className="rounded-2xl border border-border/50 bg-card/80 dark:bg-card/70 shadow-sm focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/15 transition-all duration-150">
+              <div className="flex items-center gap-3 px-3 py-2">
+                <Textarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Send a message..."
+                  className="flex-1 min-h-[44px] max-h-[140px] resize-none border-0 bg-transparent pl-1 pr-0 py-2 text-sm leading-6 text-card-foreground placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:outline-none"
+                  disabled={loading}
+                />
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={loading || !input.trim()}
+                  className="h-10 w-10 rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/25 transition-colors duration-150 hover:bg-primary/85 disabled:opacity-60 disabled:hover:bg-primary"
+                >
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  <span className="sr-only">Send message</span>
+                </Button>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Press Enter to send, Shift+Enter for new line
+            <p className="text-[11px] text-muted-foreground mt-3 text-center md:text-left">
+              DocDrift can make mistakes. Press Enter to send • Shift+Enter for
+              a new line.
             </p>
           </form>
         </div>
