@@ -16,8 +16,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const router = useRouter();
   const { signIn } = useAuth();
+  const TRANSITION_DURATION = 260;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,15 +40,31 @@ export default function LoginPage() {
     }
   };
 
+  const handleNavigate = (path: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    if (isTransitioning || loading) return;
+    setIsTransitioning(true);
+    setTimeout(() => {
+      router.push(path);
+    }, TRANSITION_DURATION);
+  };
+
   return (
-    <div className="relative flex items-center justify-center min-h-screen bg-background overflow-hidden">
+    <div
+      className={`relative flex items-center justify-center min-h-screen bg-background overflow-hidden transition-all duration-300 ease-out ${
+        isTransitioning ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
+      }`}
+    >
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 -left-20 w-72 h-72 bg-primary/20 rounded-full blur-3xl animate-pulse" />
         <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 rounded-full blur-3xl animate-spin-slow" />
       </div>
 
-      <div className="relative w-full max-w-md px-4 z-10">
+      <div className="relative w-full max-w-md px-4 z-10 text-center">
+        <span className="-mt-16 mb-4 block text-3xl font-semibold tracking-tight bg-gradient-to-r from-primary via-primary/80 to-blue-400 bg-clip-text text-transparent drop-shadow">
+          DocDrift
+        </span>
         <div className="text-center mb-8 animate-fade-in-down">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 backdrop-blur-sm mb-4 animate-bounce-subtle">
             <BookOpen className="w-8 h-8 text-primary" />
@@ -136,6 +154,8 @@ export default function LoginPage() {
             Don't have an account?{" "}
             <Link
               href="/signup"
+              prefetch={false}
+              onClick={handleNavigate("/signup")}
               className="text-primary font-medium hover:underline hover:text-primary/80 transition-colors duration-200 inline-flex items-center gap-1"
             >
               Sign up

@@ -16,8 +16,10 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const router = useRouter();
   const { signUp } = useAuth();
+  const TRANSITION_DURATION = 260;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,15 +47,31 @@ export default function SignupPage() {
     }
   };
 
+  const handleNavigate = (path: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    if (isTransitioning || loading) return;
+    setIsTransitioning(true);
+    setTimeout(() => {
+      router.push(path);
+    }, TRANSITION_DURATION);
+  };
+
   return (
-    <div className="relative flex items-center justify-center min-h-screen bg-gradient-to-br from-background via-background to-primary/5 overflow-hidden">
+    <div
+      className={`relative flex items-center justify-center min-h-screen bg-gradient-to-br from-background via-background to-primary/5 overflow-hidden transition-all duration-300 ease-out ${
+        isTransitioning ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
+      }`}
+    >
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl animate-float" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-float [animation-delay:2s]" />
         <div className="absolute top-1/2 right-1/3 w-64 h-64 bg-primary/10 rounded-full blur-3xl animate-float [animation-delay:4s]" />
       </div>
 
-      <div className="relative w-full max-w-md px-4 animate-fadeIn">
+      <div className="relative w-full max-w-md px-4 animate-fadeIn text-center">
+        <span className="-mt-16 mb-4 block text-3xl font-semibold tracking-tight bg-gradient-to-r from-primary via-primary/80 to-blue-400 bg-clip-text text-transparent drop-shadow">
+          DocDrift
+        </span>
         <div className="text-center mb-8 animate-fadeIn [animation-delay:0.1s]">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-blue-600 mb-4 shadow-lg shadow-primary/25">
             <UserPlus className="w-8 h-8 text-white" />
@@ -157,6 +175,8 @@ export default function SignupPage() {
             Already have an account?{" "}
             <Link
               href="/login"
+              prefetch={false}
+              onClick={handleNavigate("/login")}
               className="text-primary font-medium hover:underline transition-all duration-200 hover:text-primary/80"
             >
               Sign in
