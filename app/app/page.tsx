@@ -33,6 +33,28 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 const NORMALIZED_API_BASE = API_BASE_URL.replace(/\/$/, "");
 
+type EnsureConversationResult = {
+  conversationId: string;
+  created: boolean;
+};
+
+const MAX_AUTO_TITLE_LENGTH = 60;
+
+const deriveConversationTitle = (
+  seed: string | undefined,
+  fallbackIndex: number
+) => {
+  const trimmedSeed = seed?.trim();
+  if (trimmedSeed) {
+    const normalized = trimmedSeed.replace(/\s+/g, " ");
+    if (normalized.length <= MAX_AUTO_TITLE_LENGTH) {
+      return normalized;
+    }
+    return `${normalized.slice(0, MAX_AUTO_TITLE_LENGTH - 3).trimEnd()}...`;
+  }
+  return `New Conversation ${fallbackIndex}`;
+};
+
 export default function AppPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
@@ -60,12 +82,67 @@ export default function AppPage() {
   const [backendLastError, setBackendLastError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
   const healthCheckInFlightRef = useRef(false);
+  const conversationCreationRef =
+    useRef<Promise<EnsureConversationResult> | null>(null);
+  const hasLoadedConversationsRef = useRef(false);
 
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
     };
   }, []);
+
+  const ensureActiveConversation = useCallback(
+    async (seedTitle?: string): Promise<EnsureConversationResult> => {
+      if (selectedConversationId) {
+        return { conversationId: selectedConversationId, created: false };
+      }
+
+      if (!conversationCreationRef.current) {
+        const fallbackTitle = deriveConversationTitle(
+          seedTitle,
+          conversations.length + 1
+        );
+
+        const creationPromise = (async () => {
+          const { conversation_id } =
+            await conversationsApi.create(fallbackTitle);
+          const now = new Date().toISOString();
+          const newConversation: Conversation = {
+            conversation_id,
+            title: fallbackTitle,
+            created_at: now,
+            updated_at: now,
+          };
+          setConversations((prev) => [newConversation, ...prev]);
+          setSelectedConversationId(conversation_id);
+          setMessages([]);
+          setDocuments([]);
+          if (isMobile) {
+            setIsConversationsSidebarOpen(false);
+          }
+          return { conversationId: conversation_id, created: true };
+        })();
+
+        conversationCreationRef.current = creationPromise;
+      }
+
+      const pendingCreation = conversationCreationRef.current;
+      try {
+        return await pendingCreation!;
+      } finally {
+        if (conversationCreationRef.current === pendingCreation) {
+          conversationCreationRef.current = null;
+        }
+      }
+    },
+    [
+      selectedConversationId,
+      conversations.length,
+      isMobile,
+      setIsConversationsSidebarOpen,
+    ]
+  );
 
   const runHealthCheck = useCallback(async () => {
     if (
@@ -204,7 +281,8 @@ export default function AppPage() {
   };
 
   const loadConversations = async () => {
-    const shouldShowInitialSpinner = conversations.length === 0;
+    const shouldShowInitialSpinner =
+      conversations.length === 0 && !hasLoadedConversationsRef.current;
     if (shouldShowInitialSpinner) {
       setLoading(true);
     }
@@ -234,6 +312,7 @@ export default function AppPage() {
         setSelectedConversationId(mockConversations[0].conversation_id);
       }
     } finally {
+      hasLoadedConversationsRef.current = true;
       if (shouldShowInitialSpinner) {
         setLoading(false);
       }
@@ -333,9 +412,13 @@ export default function AppPage() {
           (c) => c.conversation_id !== conversationId
         );
         if (selectedConversationId === conversationId) {
-          setSelectedConversationId(
-            remaining.length > 0 ? remaining[0].conversation_id : null
-          );
+          const nextSelected =
+            remaining.length > 0 ? remaining[0].conversation_id : null;
+          setSelectedConversationId(nextSelected);
+          setMessages([]);
+          setDocuments([]);
+          setPreviewDoc(null);
+          setPreviewingDocId(null);
         }
         return remaining;
       });
@@ -383,21 +466,28 @@ export default function AppPage() {
   };
 
   const handleSendMessage = async (content: string) => {
-    if (!selectedConversationId || sendingMessage) return;
+    if (sendingMessage) return;
 
     setSendingMessage(true);
-    const userMessage: Message = {
-      message_id: `temp-${Date.now()}`,
-      conversation_id: selectedConversationId,
-      role: "user",
-      content,
-      timestamp: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, userMessage]);
+    let ensuredConversationId: string | null = null;
+    let userMessageAppended = false;
 
     try {
+      const ensured = await ensureActiveConversation(content);
+      ensuredConversationId = ensured.conversationId;
+
+      const userMessage: Message = {
+        message_id: `temp-${Date.now()}`,
+        conversation_id: ensuredConversationId,
+        role: "user",
+        content,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, userMessage]);
+      userMessageAppended = true;
+
       const assistantMessage = await messagesApi.send(
-        selectedConversationId,
+        ensuredConversationId,
         content
       );
       setMessages((prev) => [...prev, assistantMessage]);
@@ -408,28 +498,34 @@ export default function AppPage() {
         description: "Failed to send message. Using offline mode.",
         variant: "destructive",
       });
-      setTimeout(() => {
-        const assistantMessage: Message = {
-          message_id: (Date.now() + 1).toString(),
-          conversation_id: selectedConversationId,
-          role: "assistant",
-          content:
-            "This is a mock response. Connect to your backend API to get real AI responses based on your documents.",
-          timestamp: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, assistantMessage]);
-      }, 1000);
+      if (ensuredConversationId && userMessageAppended) {
+        const fallbackConversationId = ensuredConversationId;
+        setTimeout(() => {
+          const assistantMessage: Message = {
+            message_id: (Date.now() + 1).toString(),
+            conversation_id: fallbackConversationId,
+            role: "assistant",
+            content:
+              "This is a mock response. Connect to your backend API to get real AI responses based on your documents.",
+            timestamp: new Date().toISOString(),
+          };
+          setMessages((prev) => [...prev, assistantMessage]);
+        }, 1000);
+      }
     } finally {
       setSendingMessage(false);
     }
   };
 
   const handleUploadDocument = async (file: File) => {
-    if (!selectedConversationId) return;
+    let ensuredConversationId: string | null = null;
 
     try {
+      const ensured = await ensureActiveConversation();
+      ensuredConversationId = ensured.conversationId;
+
       const newDocument = await documentsApi.upload(
-        selectedConversationId,
+        ensuredConversationId,
         file
       );
       setDocuments((prev) => [...prev, newDocument]);
@@ -444,15 +540,17 @@ export default function AppPage() {
         description: "Failed to upload document. Using offline mode.",
         variant: "destructive",
       });
-      const newDocument: Document = {
-        document_id: Date.now().toString(),
-        conversation_id: selectedConversationId,
-        filename: file.name,
-        file_size: file.size,
-        upload_date: new Date().toISOString(),
-        is_included: true,
-      };
-      setDocuments((prev) => [...prev, newDocument]);
+      if (ensuredConversationId) {
+        const newDocument: Document = {
+          document_id: Date.now().toString(),
+          conversation_id: ensuredConversationId,
+          filename: file.name,
+          file_size: file.size,
+          upload_date: new Date().toISOString(),
+          is_included: true,
+        };
+        setDocuments((prev) => [...prev, newDocument]);
+      }
     }
   };
 
